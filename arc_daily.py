@@ -15,6 +15,12 @@ from pathlib import Path
 from datetime import datetime, timezone
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 BASE_URL = "https://community.arc.network"
 
 
@@ -284,48 +290,136 @@ def load_cookies(path: str) -> list:
     raise ValueError("Format cookie tidak dikenali. Gunakan array JSON atau {\"cookies\": [...]}")
 
 
+def normalize_cookies(cookies: list) -> list:
+    result = []
+    for cookie in cookies:
+        c = dict(cookie)
+        if 'sameSite' in c:
+            ss = c['sameSite']
+            c['sameSite'] = 'None' if ss in ('no_restriction', 'unspecified', 'None', None) else \
+                            'Lax' if ss == 'lax' else 'Strict'
+        for key in ['id', 'storeId', 'session', 'hostOnly']:
+            c.pop(key, None)
+        result.append(c)
+    return result
+
+
+async def linkedin_login(page, email: str, password: str) -> bool:
+    print("🔑 Login via LinkedIn...")
+    try:
+        await page.goto(f"{BASE_URL}/home", wait_until="networkidle", timeout=30000)
+        await page.wait_for_timeout(2000)
+
+        # Klik tombol login LinkedIn di Arc
+        login_btn = await page.evaluate("""
+            () => {
+                const btns = [...document.querySelectorAll('a, button')];
+                const btn = btns.find(b => /linkedin/i.test(b.textContent + b.getAttribute('href') + ''));
+                if (btn) { btn.click(); return true; }
+                return false;
+            }
+        """)
+        if not login_btn:
+            # Coba cari tombol sign in dulu
+            await page.evaluate("""
+                () => {
+                    const btn = [...document.querySelectorAll('a, button')]
+                        .find(b => /sign in|log in|login/i.test(b.textContent));
+                    if (btn) btn.click();
+                }
+            """)
+            await page.wait_for_timeout(2000)
+            await page.evaluate("""
+                () => {
+                    const btn = [...document.querySelectorAll('a, button')]
+                        .find(b => /linkedin/i.test(b.textContent + b.getAttribute('href') + ''));
+                    if (btn) btn.click();
+                }
+            """)
+
+        await page.wait_for_timeout(3000)
+
+        # Sekarang di halaman LinkedIn login
+        current_url = page.url
+        if 'linkedin.com' not in current_url:
+            print("   ⚠️  Tidak redirect ke LinkedIn, coba langsung ke LinkedIn login")
+            await page.goto("https://www.linkedin.com/login", wait_until="networkidle", timeout=20000)
+
+        await page.wait_for_timeout(2000)
+
+        # Isi email
+        await page.fill('#username', email)
+        await page.wait_for_timeout(500)
+        await page.fill('#password', password)
+        await page.wait_for_timeout(500)
+        await page.click('[type="submit"]')
+
+        # Tunggu redirect balik ke Arc (max 30 detik)
+        print("   ⏳ Menunggu redirect setelah login...")
+        for _ in range(30):
+            await page.wait_for_timeout(1000)
+            if 'community.arc.network' in page.url:
+                break
+            if 'checkpoint' in page.url or 'verify' in page.url or 'challenge' in page.url:
+                print("   ⚠️  LinkedIn minta verifikasi tambahan (2FA/CAPTCHA)")
+                print("   ❌ Auto-login gagal, perlu manual")
+                return False
+
+        await page.wait_for_timeout(3000)
+        logged_in = await check_logged_in(page)
+        if logged_in:
+            print("   ✅ LinkedIn login berhasil!")
+            # Simpan cookie baru
+            cookies = await page.context.cookies()
+            cookies_path = os.environ.get("COOKIES_PATH", "cookies.json")
+            with open(cookies_path, 'w') as f:
+                json.dump(cookies, f, indent=2)
+            print(f"   💾 Cookie baru disimpan ke {cookies_path}")
+            return True
+        return False
+    except Exception as e:
+        print(f"   ❌ Login error: {e}")
+        return False
+
+
 async def main(cookies_path: str, headless: bool, webhook_url: str = None):
-    cookies = load_cookies(cookies_path)
+    li_email = os.environ.get("LINKEDIN_EMAIL")
+    li_password = os.environ.get("LINKEDIN_PASSWORD")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=headless,
-            args=["--no-sandbox", "--disable-dev-shm-usage"]  # penting untuk VPS
+            args=["--no-sandbox", "--disable-dev-shm-usage"]
         )
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         )
 
-        # Inject cookies
-        print("🍪 Inject cookies...")
-        for cookie in cookies:
-            # Playwright butuh 'sameSite' dengan format tertentu
-            if 'sameSite' in cookie:
-                ss = cookie['sameSite']
-                if ss in ('no_restriction', 'unspecified', 'None', None):
-                    cookie['sameSite'] = 'None'
-                elif ss == 'lax':
-                    cookie['sameSite'] = 'Lax'
-                elif ss == 'strict':
-                    cookie['sameSite'] = 'Strict'
-            # Hapus field yang tidak dikenal Playwright
-            for key in ['id', 'storeId', 'session', 'hostOnly']:
-                cookie.pop(key, None)
-        await context.add_cookies(cookies)
+        # Inject cookies kalau file ada
+        if Path(cookies_path).exists():
+            print("🍪 Inject cookies...")
+            raw = load_cookies(cookies_path)
+            await context.add_cookies(normalize_cookies(raw))
 
         page = await context.new_page()
 
         # Cek login
         print("🔐 Cek status login...")
         logged_in = await check_logged_in(page)
+
         if not logged_in:
-            msg = "Cookie expired / belum login. Perbarui cookies.json."
-            print(f"❌ {msg}")
-            if webhook_url:
-                send_discord(webhook_url, [], None, 0, error=msg)
-            await browser.close()
-            sys.exit(1)
+            if li_email and li_password:
+                print("🔄 Cookie expired, coba auto-login LinkedIn...")
+                logged_in = await linkedin_login(page, li_email, li_password)
+            if not logged_in:
+                msg = "Login gagal. Set LINKEDIN_EMAIL & LINKEDIN_PASSWORD di .env, atau perbarui cookies.json."
+                print(f"❌ {msg}")
+                if webhook_url:
+                    send_discord(webhook_url, [], None, 0, error=msg)
+                await browser.close()
+                sys.exit(1)
+
         print("✅ Login berhasil!")
 
         # Eksekusi task

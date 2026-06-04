@@ -1,7 +1,9 @@
 # 本 skill 无本地持久化状态（状态在 Arc my-contributions 页面），
 # 但保留这些规则以防将来有人引入配置或被编辑器/OS 文件污染。
 
-# 敏感凭证（如果将来加 config.json）
+# Kredensial & cookies — JANGAN COMMIT
+.env
+cookies.json
 config.json
 
 # macOS
