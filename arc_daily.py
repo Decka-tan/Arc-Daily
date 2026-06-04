@@ -58,9 +58,11 @@ def send_discord(webhook_url: str, success_articles: list, watched_video, points
         method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=10):
-            pass
-        print("📨 Laporan terkirim ke Discord.")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            print(f"📨 Laporan terkirim ke Discord. (status: {resp.status})")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"⚠️  Gagal kirim ke Discord: HTTP {e.code} - {body}")
     except urllib.error.URLError as e:
         print(f"⚠️  Gagal kirim ke Discord: {e}")
 
