@@ -217,13 +217,13 @@ async def read_articles(page, articles, max_count=5):
 
         title = await page.evaluate("""
             async () => {
-                await new Promise(r => setTimeout(r, 2000));
+                await new Promise(r => setTimeout(r, 3000));
                 const h = document.body.scrollHeight;
-                for (let i = 1; i <= 8; i++) {
-                    window.scrollTo({ top: (h * i) / 9, behavior: 'smooth' });
-                    await new Promise(r => setTimeout(r, 2000));
+                for (let i = 1; i <= 10; i++) {
+                    window.scrollTo({ top: (h * i) / 11, behavior: 'smooth' });
+                    await new Promise(r => setTimeout(r, 3000));
                 }
-                await new Promise(r => setTimeout(r, 2000));
+                await new Promise(r => setTimeout(r, 3000));
                 return document.title;
             }
         """)
@@ -298,7 +298,10 @@ def normalize_cookies(cookies: list) -> list:
             ss = c['sameSite']
             c['sameSite'] = 'None' if ss in ('no_restriction', 'unspecified', 'None', None) else \
                             'Lax' if ss == 'lax' else 'Strict'
-        for key in ['id', 'storeId', 'session', 'hostOnly']:
+        # Cookie-Editor pakai expirationDate, Playwright butuh expires
+        if 'expirationDate' in c:
+            c['expires'] = c.pop('expirationDate')
+        for key in ['id', 'storeId', 'session', 'hostOnly', 'firstPartyDomain', 'partitionKey']:
             c.pop(key, None)
         result.append(c)
     return result
