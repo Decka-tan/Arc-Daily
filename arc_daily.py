@@ -23,6 +23,34 @@ except ImportError:
 
 BASE_URL = "https://community.arc.io"
 
+# ── Engagement layers (resep yang terbukti credit poin) ──────────────────
+# Dijalankan di tiap halaman SETELAH load. Tanpa ini, Arc/Gradual tracker
+# nganggep tab "hidden" / consent belum diterima → read & watch GA diitung.
+ENGAGEMENT_JS = """
+() => {
+    // Layer 3 — buang banner OneTrust (GDPR) yang block pointer events & render
+    const sdk = document.getElementById('onetrust-consent-sdk');
+    if (sdk) sdk.remove();
+    document.querySelectorAll('.onetrust-pc-dark-filter, #onetrust-banner-sdk')
+        .forEach(e => e.remove());
+    // Layer 4 — paksa tab dianggap visible & fokus
+    try {
+        Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
+        Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
+        document.dispatchEvent(new Event('visibilitychange'));
+        window.dispatchEvent(new Event('focus'));
+    } catch (e) {}
+}
+"""
+
+# Di-inject sebelum tiap halaman load (level context) — visibility default visible
+VISIBILITY_INIT = """
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
+    Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
+    window.chrome = { runtime: {} };
+"""
+
 
 def send_discord(webhook_url: str, success_articles: list, watched_video, points: int,
                  error: str = None):
@@ -34,7 +62,7 @@ def send_discord(webhook_url: str, success_articles: list, watched_video, points
         description = f"```{error}```"
         fields = []
     else:
-        color = 0x00C853 if points >= 30 else 0xFFAA00
+        color = 0x00C853 if points >= 25 else 0xFFAA00
         title = "✅ Arc Daily Task — Selesai"
         article_list = "\n".join(
             f"{i}. {a['title'][:60]}" for i, a in enumerate(success_articles, 1)
@@ -286,19 +314,23 @@ async def read_articles(page, articles, max_count=5):
             continue
 
         await page.wait_for_timeout(3000)
-        # Scroll pakai MOUSE WHEEL ASLI (page.mouse.wheel = event trusted lewat CDP,
-        # isTrusted=true). Arc cuma ngitung read dari scroll asli, bukan window.scrollTo
-        # (yang isTrusted=false). Ini bedanya bot vs manusia/Hermes.
+        # Layer 3+4: buang OneTrust & paksa visible SETELAH halaman ke-load
+        try:
+            await page.evaluate(ENGAGEMENT_JS)
+        except Exception:
+            pass
+        # Layer 5: dwell ~180 detik + scroll mouse wheel ASLI (isTrusted=true)
         try:
             await page.mouse.move(640, 360)
-            # Scroll turun pelan-pelan (kayak baca beneran)
-            for _ in range(18):
+            # Scroll turun pelan (≈70 detik)
+            for _ in range(20):
                 await page.mouse.wheel(0, 350)
                 await page.wait_for_timeout(3500)
-            # Scroll naik-turun dikit biar tetap ada aktivitas
-            for i in range(8):
+            # Re-assert visibility (kadang ke-reset) + tetap aktif (≈110 detik)
+            await page.evaluate(ENGAGEMENT_JS)
+            for i in range(22):
                 await page.mouse.wheel(0, -250 if i % 2 else 250)
-                await page.wait_for_timeout(4000)
+                await page.wait_for_timeout(5000)
         except Exception as e:
             print(f"     (scroll wheel error: {e})")
         title = await page.title()
@@ -319,45 +351,86 @@ async def read_articles(page, articles, max_count=5):
     return success
 
 
-async def watch_video(page, videos, max_try=3):
-    print(f"\n🎬 Mulai tonton video...")
-    for video in videos[:max_try]:
+async def watch_videos(context, cookies, videos, max_count=4):
+    """Tonton hingga 4 video. Tiap video pakai context/tab fresh biar tracker
+    Wistia ga nganggep 'udah pernah liat' (state pollution). Cap Arc = 4/24jam."""
+    print(f"\n🎬 Mulai tonton video (target: {max_count})...")
+    watched = []
+    for video in videos:
+        if len(watched) >= max_count:
+            break
         url = f"{BASE_URL}/home/{video['slug']}"
         print(f"   → {video['title'][:60]}...")
+
+        # Layer F: fresh context per video (cookies di-inject ulang)
+        vctx = await context.browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                       "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        )
+        await vctx.add_init_script(VISIBILITY_INIT)
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
-        except PWTimeout:
-            print("     ✗ Timeout, coba video berikutnya.")
-            continue
+            await vctx.add_cookies(normalize_cookies(cookies))
+            vpage = await vctx.new_page()
+            try:
+                await vpage.goto(url, wait_until="domcontentloaded", timeout=20000)
+            except PWTimeout:
+                print("     ✗ Timeout, skip.")
+                await vctx.close()
+                continue
 
-        await page.wait_for_timeout(3000)
+            await vpage.wait_for_timeout(3000)
+            await vpage.evaluate(ENGAGEMENT_JS)  # OneTrust + visible
 
-        # Cari tombol Play Video / Play video
-        play_btn = await page.evaluate("""
-            () => {
-                const btns = [...document.querySelectorAll('button, [role="button"]')];
-                const btn = btns.find(b => /^Play [Vv]ideo/.test((b.getAttribute('aria-label') || b.textContent || '').trim()));
-                if (btn) { btn.click(); return 'clicked-button'; }
-                // fallback: iframe
-                const f = document.querySelector('iframe[src*="wistia"], iframe[src*="player"], iframe[allow*="autoplay"]');
-                if (f) { f.click(); return 'clicked-iframe'; }
-                return 'not-found';
-            }
-        """)
-        print(f"     Play result: {play_btn}")
+            # Layer 6: Wistia/iframe — set autoplay param lalu klik tengah iframe
+            play = await vpage.evaluate("""
+                () => {
+                    // tombol Play eksplisit dulu
+                    const btn = [...document.querySelectorAll('button, [role=\"button\"]')]
+                        .find(b => /^Play [Vv]ideo/.test((b.getAttribute('aria-label')||b.textContent||'').trim()));
+                    if (btn) { btn.click(); }
+                    // iframe: tambah autoPlay param
+                    const f = document.querySelector('iframe[src*=\"wistia\"], iframe[src*=\"player\"], iframe[allow*=\"autoplay\"]');
+                    if (f) {
+                        try {
+                            const u = new URL(f.src);
+                            u.searchParams.set('autoPlay', 'true');
+                            u.searchParams.set('muted', 'true');
+                            f.src = u.toString();
+                        } catch(e) {}
+                        return 'iframe';
+                    }
+                    return btn ? 'button' : 'none';
+                }
+            """)
+            # Klik tengah iframe (trigger play event yang propagate ke tracker)
+            try:
+                box = await vpage.evaluate("""
+                    () => {
+                        const f = document.querySelector('iframe[src*=\"wistia\"], iframe[src*=\"player\"], iframe[allow*=\"autoplay\"]');
+                        if (!f) return null;
+                        const r = f.getBoundingClientRect();
+                        return { x: r.x + r.width/2, y: r.y + r.height/2 };
+                    }
+                """)
+                if box:
+                    await vpage.mouse.click(box['x'], box['y'])
+            except Exception:
+                pass
+            print(f"     Play: {play}")
 
-        if play_btn == 'not-found':
-            print("     ✗ Tombol play tidak ditemukan, coba video berikutnya.")
-            continue
+            # Dwell 90 detik, re-assert visible di tengah
+            print("     ⏳ Nonton 90 detik...")
+            await vpage.wait_for_timeout(45000)
+            await vpage.evaluate(ENGAGEMENT_JS)
+            await vpage.wait_for_timeout(45000)
+            watched.append(video)
+            print(f"     ✓ Ditonton ({len(watched)}/{max_count})")
+        finally:
+            await vctx.close()
 
-        # Tunggu 40 detik (video dianggap ditonton)
-        print("     ⏳ Menunggu 40 detik...")
-        await page.evaluate("() => new Promise(r => setTimeout(r, 40000))")
-        print(f"     ✓ Video ditonton: {video['title'][:60]}")
-        return video
-
-    print("   ✗ Tidak ada video yang berhasil ditonton.")
-    return None
+    if not watched:
+        print("   ✗ Tidak ada video yang berhasil ditonton.")
+    return watched
 
 
 def load_cookies(path: str) -> list:
@@ -499,11 +572,7 @@ async def main(cookies_path: str, headless: bool, webhook_url: str = None):
                 print("🌐 Pakai Chromium (Chrome tidak tersedia)")
 
             browser = context.browser
-            await context.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-                Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3] });
-                window.chrome = { runtime: {} };
-            """)
+            await context.add_init_script(VISIBILITY_INIT)
 
             if Path(cookies_path).exists():
                 print("🍪 Inject cookies...")
@@ -525,33 +594,40 @@ async def main(cookies_path: str, headless: bool, webhook_url: str = None):
 
             print("✅ Login berhasil!")
 
+            raw_cookies = load_cookies(cookies_path) if Path(cookies_path).exists() else []
+
             read_titles, video_titles = await get_history(page)
             candidates = await get_candidates(page)
             articles, videos = filter_candidates(candidates, read_titles, video_titles)
 
             print(f"\n📊 Kandidat tersedia: {len(articles)} artikel, {len(videos)} video")
 
-            success_articles = await read_articles(page, articles)
-            watched_video = await watch_video(page, videos)
+            # Read Content: max 5/24jam · Watch a Video: max 4/24jam
+            success_articles = await read_articles(page, articles, max_count=5)
+            watched_videos = await watch_videos(context, raw_cookies, videos, max_count=4)
 
-            points = len(success_articles) * 5 + (5 if watched_video else 0) + 5
-            remaining_articles = len(articles) - len(success_articles)
-            remaining_videos = len(videos) - (1 if watched_video else 0)
+            # Poin resmi Arc: Read=2 (max5), Watch=4 (max4), Daily Active=1
+            points = len(success_articles) * 2 + len(watched_videos) * 4 + 1
+
+            # Tracker Gradual kadang delayed 2-3 menit → tunggu sebelum lapor
+            print("\n⏳ Tunggu 150 detik biar tracking ter-commit...")
+            await page.wait_for_timeout(150000)
 
             print("\n" + "="*50)
             print("✅ SELESAI!")
             print(f"📖 Berhasil baca {len(success_articles)} artikel:")
             for i, a in enumerate(success_articles, 1):
                 print(f"   {i}. {a['title'][:70]}")
-            print(f"🎬 Video: {watched_video['title'][:70] if watched_video else '—'}")
-            print(f"💰 Estimasi poin: {points}")
-            print(f"📦 Sisa stok: {remaining_articles} artikel / {remaining_videos} video")
+            print(f"🎬 Berhasil tonton {len(watched_videos)} video:")
+            for i, v in enumerate(watched_videos, 1):
+                print(f"   {i}. {v['title'][:70]}")
+            print(f"💰 Estimasi poin: {points} (read {len(success_articles)}×2 + video {len(watched_videos)}×4 + daily 1)")
             print(f"⏰ Waktu: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
-            print("   Cek my-contributions dalam ~5 menit")
             print("="*50)
 
             if webhook_url:
-                send_discord(webhook_url, success_articles, watched_video, points)
+                first_video = watched_videos[0] if watched_videos else None
+                send_discord(webhook_url, success_articles, first_video, points)
 
             await context.close()
 

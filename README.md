@@ -1,6 +1,25 @@
 # Arc Daily Task Bot
 
-Bot otomatis untuk daily task [Arc Community](https://community.arc.network) — baca 5 artikel + tonton 1 video + check-in = **35 poin/hari**.
+Bot otomatis untuk daily task [Arc Community](https://community.arc.io) — baca 5 artikel + tonton 4 video + daily-active = **27 poin/hari**.
+
+> Skor harian maksimal (aturan resmi Arc):
+> - **Read Content**: 2 poin × 5/hari = 10
+> - **Watch a Video**: 4 poin × 4/hari = 16
+> - **Daily Active**: 1 poin
+> - **Total = 27 poin/hari**
+
+## Kenapa bot biasa GAGAL (dan bot ini jalan)
+
+Arc/Gradual ngitung engagement lewat **6 layer**. Kalau satu aja miss, read/watch **ga keitung**:
+
+| Layer | Yang dicek | Fix di bot ini |
+|---|---|---|
+| 1. Auth | `token-v2` JWT valid | inject cookie |
+| 2. Cloudflare | `_cfuvid` + `__cf_bm` | cookie jar lengkap |
+| 3. GDPR | banner OneTrust harus hilang | `ENGAGEMENT_JS` remove banner |
+| 4. **Visibility** | `document.visibilityState=visible` | **override (ini paling sering ke-miss!)** |
+| 5. Engagement | dwell ≥ 2 menit + scroll asli | 180s + `mouse.wheel` (isTrusted) |
+| 6. Video | Wistia iframe play | autoplay param + klik tengah iframe, fresh context/video |
 
 ## Setup
 
@@ -9,80 +28,51 @@ Bot otomatis untuk daily task [Arc Community](https://community.arc.network) —
 ```bash
 pip install -r requirements.txt
 playwright install chromium
-playwright install-deps chromium  # Linux/VPS only
+playwright install-deps chromium   # Linux/VPS only
 ```
 
-### 2. Buat file `.env`
+### 2. Siapkan `cookies.json`
 
-```bash
-cp .env.example .env
-nano .env
-```
+Login ke `community.arc.io` di Chrome, pakai extension **Cookie-Editor** → **Export as JSON** → simpan jadi `cookies.json` di folder ini.
 
-Isi dengan kredensial kamu:
+> ⚠️ Cookie `token-v2` Arc itu JWT yang **expired tiap 2 jam**. Buat cron harian, idealnya pakai profil Chrome persisten yang login sekali (auto-refresh). Untuk run manual, export cookie segar tepat sebelum jalan.
+
+### 3. (Opsional) `.env` buat webhook Discord
 
 ```env
-LINKEDIN_EMAIL=your@email.com
-LINKEDIN_PASSWORD=yourpassword
 DISCORD_WEBHOOK=https://discord.com/api/webhooks/xxx/yyy
-COOKIES_PATH=cookies.json
+CHROME_PROFILE=/home/ubuntu/arc-chrome-profile
 ```
-
-> `.env` tidak akan ter-commit ke GitHub (sudah ada di `.gitignore`).
-
-### 3. Siapkan cookies (pertama kali)
-
-Login manual dulu untuk generate `cookies.json`:
-1. Buka `community.arc.network` di Chrome, login via LinkedIn
-2. Install extension [Cookie-Editor](https://chrome.google.com/webstore/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm)
-3. Klik icon Cookie-Editor → **Export as JSON**
-4. Simpan sebagai `cookies.json` di folder ini
-
-Setelah cookies ada, bot akan **auto-refresh login via LinkedIn** kalau cookies expired — tidak perlu manual lagi.
 
 ## Cara Pakai
 
 ```bash
-# Jalankan biasa (headless, cocok untuk VPS)
-python arc_daily.py
+# VPS headless (pakai xvfb biar browser headed = lolos deteksi)
+xvfb-run --auto-servernum python arc_daily.py
 
-# Dengan laporan ke Discord
-python arc_daily.py --webhook "https://discord.com/api/webhooks/xxx/yyy"
-
-# Tampilkan browser (untuk debug)
+# Debug dengan window
 python arc_daily.py --no-headless
+
+# Dengan laporan Discord
+python arc_daily.py --webhook "https://discord.com/api/webhooks/xxx/yyy"
 ```
 
-Semua config bisa juga lewat `.env` — tidak perlu passing argumen setiap kali.
+> Webhook Discord dari VPS sering kena Cloudflare error 1010 — bot ini udah kirim **User-Agent browser** biar lolos. Ga perlu proxy.
 
-## Auto-run Tiap Hari (VPS/Linux)
+Durasi sekali jalan ≈ **20-25 menit** (5 artikel × 180s + 4 video × 90s + 150s final wait). Wajar — dwell time itu yang bikin keitung.
+
+## Auto-run Tiap Hari (cron)
 
 ```bash
 crontab -e
 ```
 
-Tambahkan (jalan jam 08:00 WIB = 01:00 UTC):
-
 ```
-0 1 * * * cd /home/ubuntu/ArcSign-Skill && /home/ubuntu/arcenv/bin/python arc_daily.py >> arc.log 2>&1
+0 1 * * * cd /home/ubuntu/Arc-Daily && xvfb-run --auto-servernum python arc_daily.py >> arc.log 2>&1
 ```
 
-## Laporan Discord
+## Catatan Penting
 
-Bot kirim embed ke Discord setiap selesai jalan:
-
-- Daftar artikel yang dibaca
-- Video yang ditonton  
-- Estimasi poin (maks 35)
-- Link ke my-contributions
-- Alert merah kalau gagal login
-
-## Flow Auto-Login LinkedIn
-
-1. Bot inject `cookies.json`
-2. Cek apakah sudah login
-3. Kalau belum → auto login via LinkedIn dengan kredensial di `.env`
-4. Simpan cookie baru ke `cookies.json`
-5. Lanjut jalankan task
-
-> Kalau LinkedIn minta 2FA/CAPTCHA, auto-login gagal dan bot kirim alert ke Discord.
+- **Cek poin ≥2 menit setelah selesai** — tracker Gradual kadang delayed 2-3 menit (bot udah nunggu 150s di akhir).
+- Tiap video pakai **context baru** biar tracker ga nganggep "udah pernah liat".
+- Headless polos **ga akan keitung** (visibility=hidden). Selalu pakai `xvfb-run` di VPS.
