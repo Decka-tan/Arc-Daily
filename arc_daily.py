@@ -21,7 +21,7 @@ try:
 except ImportError:
     pass
 
-BASE_URL = "https://community.arc.network"
+BASE_URL = "https://community.arc.io"
 
 
 def send_discord(webhook_url: str, success_articles: list, watched_video, points: int,
