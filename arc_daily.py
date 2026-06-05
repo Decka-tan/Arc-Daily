@@ -241,13 +241,19 @@ async def read_articles(page, articles, max_count=5):
 
         title = await page.evaluate("""
             async () => {
-                await new Promise(r => setTimeout(r, 2000));
+                await new Promise(r => setTimeout(r, 3000));
                 const h = document.body.scrollHeight;
+                // Scroll turun pelan-pelan
                 for (let i = 1; i <= 8; i++) {
                     window.scrollTo({ top: (h * i) / 9, behavior: 'smooth' });
-                    await new Promise(r => setTimeout(r, 2000));
+                    await new Promise(r => setTimeout(r, 5000));
                 }
-                await new Promise(r => setTimeout(r, 2000));
+                // Tetap di halaman lebih lama biar ping heartbeat fire berkali-kali
+                // (read tracking Arc berbasis dwell time, bukan cuma buka halaman)
+                for (let i = 0; i < 6; i++) {
+                    window.scrollBy(0, (i % 2 === 0 ? 1 : -1) * 200);
+                    await new Promise(r => setTimeout(r, 5000));
+                }
                 return document.title;
             }
         """)
