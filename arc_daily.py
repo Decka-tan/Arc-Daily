@@ -63,8 +63,12 @@ def send_discord(webhook_url: str, success_articles: list, watched_video, points
         headers={"Content-Type": "application/json"},
         method="POST"
     )
+    proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({"https": proxy, "http": proxy} if proxy else {})
+    )
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with opener.open(req, timeout=10) as resp:
             print(f"📨 Laporan terkirim ke Discord. (status: {resp.status})")
     except urllib.error.HTTPError as e:
         body = e.read().decode()
