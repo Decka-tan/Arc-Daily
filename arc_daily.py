@@ -236,8 +236,29 @@ async def read_articles(page, articles, max_count=5):
         url = f"{BASE_URL}/home/{article['slug']}"
         print(f"   → {article['type']}: {article['title'][:60]}...")
         api_calls.clear()
+        # Navigasi SPA: buka homepage lalu KLIK link artikel (kayak user beneran),
+        # bukan goto langsung — biar event "read" client-side ke-trigger
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            await page.goto(f"{BASE_URL}/home", wait_until="domcontentloaded", timeout=20000)
+            await page.wait_for_timeout(2000)
+            clicked = await page.evaluate(f"""
+                async (slug) => {{
+                    // scroll cari link sampai ketemu
+                    for (let r = 0; r < 20; r++) {{
+                        const a = [...document.querySelectorAll('a[href]')]
+                            .find(a => (a.getAttribute('href') || '').includes(slug));
+                        if (a) {{ a.scrollIntoView({{block:'center'}}); a.click(); return true; }}
+                        window.scrollTo(0, document.body.scrollHeight);
+                        await new Promise(r => setTimeout(r, 1200));
+                    }}
+                    return false;
+                }}
+            """, article['slug'])
+            if not clicked:
+                # fallback ke goto langsung kalau link ga ketemu
+                await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            else:
+                await page.wait_for_timeout(3000)
         except PWTimeout:
             print("     ✗ Timeout navigasi, skip.")
             fail_streak += 1
