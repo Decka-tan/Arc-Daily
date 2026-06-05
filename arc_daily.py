@@ -205,10 +205,17 @@ async def read_articles(page, articles, max_count=5):
 
     api_calls = []
     def on_request(request):
-        if any(x in request.url for x in ['/api/', 'graphql', 'activity', 'read', 'track', 'event', 'contrib']):
-            api_calls.append(f"  [REQ] {request.method} {request.url}")
+        if 'community.arc.io/api' in request.url:
+            body = ""
+            try:
+                post_data = request.post_data
+                if post_data:
+                    body = f" | BODY: {post_data[:300]}"
+            except Exception:
+                pass
+            api_calls.append(f"  [REQ] {request.method} {request.url}{body}")
     def on_response(response):
-        if any(x in response.url for x in ['/api/', 'graphql', 'activity', 'read', 'track', 'event', 'contrib']):
+        if 'community.arc.io/api' in response.url:
             api_calls.append(f"  [RES] {response.status} {response.url}")
     page.on("request", on_request)
     page.on("response", on_response)
