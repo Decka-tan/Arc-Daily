@@ -285,26 +285,23 @@ async def read_articles(page, articles, max_count=5):
             fail_streak += 1
             continue
 
-        title = await page.evaluate("""
-            async () => {
-                await new Promise(r => setTimeout(r, 3000));
-                const h = document.body.scrollHeight;
-                // Scroll turun pelan-pelan di awal (kayak mulai baca)
-                for (let i = 1; i <= 8; i++) {
-                    window.scrollTo({ top: (h * i) / 9, behavior: 'smooth' });
-                    await new Promise(r => setTimeout(r, 4000));
-                }
-                // DWELL: tetap di halaman ~4 menit biar ping heartbeat (user/ping)
-                // fire berkali-kali. Arc ngitung "read" berdasarkan lama tab kebuka,
-                // bukan cuma buka halaman. (terbukti: scroll dikit lalu tinggalin = masuk)
-                const t = document.title;
-                for (let i = 0; i < 24; i++) {
-                    window.scrollBy(0, (i % 2 === 0 ? 1 : -1) * 150);
-                    await new Promise(r => setTimeout(r, 10000));
-                }
-                return t;
-            }
-        """)
+        await page.wait_for_timeout(3000)
+        # Scroll pakai MOUSE WHEEL ASLI (page.mouse.wheel = event trusted lewat CDP,
+        # isTrusted=true). Arc cuma ngitung read dari scroll asli, bukan window.scrollTo
+        # (yang isTrusted=false). Ini bedanya bot vs manusia/Hermes.
+        try:
+            await page.mouse.move(640, 360)
+            # Scroll turun pelan-pelan (kayak baca beneran)
+            for _ in range(18):
+                await page.mouse.wheel(0, 350)
+                await page.wait_for_timeout(3500)
+            # Scroll naik-turun dikit biar tetap ada aktivitas
+            for i in range(8):
+                await page.mouse.wheel(0, -250 if i % 2 else 250)
+                await page.wait_for_timeout(4000)
+        except Exception as e:
+            print(f"     (scroll wheel error: {e})")
+        title = await page.title()
         if api_calls:
             print("     📡 API calls detected:")
             for c in api_calls:
