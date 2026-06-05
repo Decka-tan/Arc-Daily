@@ -240,13 +240,13 @@ async def read_articles(page, articles, max_count=5):
 
         title = await page.evaluate("""
             async () => {
-                await new Promise(r => setTimeout(r, 5000));
+                await new Promise(r => setTimeout(r, 2000));
                 const h = document.body.scrollHeight;
-                for (let i = 1; i <= 10; i++) {
-                    window.scrollTo({ top: (h * i) / 11, behavior: 'smooth' });
-                    await new Promise(r => setTimeout(r, 8000));
+                for (let i = 1; i <= 8; i++) {
+                    window.scrollTo({ top: (h * i) / 9, behavior: 'smooth' });
+                    await new Promise(r => setTimeout(r, 2000));
                 }
-                await new Promise(r => setTimeout(r, 5000));
+                await new Promise(r => setTimeout(r, 2000));
                 return document.title;
             }
         """)
@@ -427,12 +427,22 @@ async def main(cookies_path: str, headless: bool, webhook_url: str = None):
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=headless,
-                args=["--no-sandbox", "--disable-dev-shm-usage"]
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-blink-features=AutomationControlled",
+                ]
             )
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                           "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                           "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
             )
+            await context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3] });
+                window.chrome = { runtime: {} };
+            """)
 
             if Path(cookies_path).exists():
                 print("🍪 Inject cookies...")
