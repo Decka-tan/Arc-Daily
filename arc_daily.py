@@ -424,21 +424,30 @@ async def main(cookies_path: str, headless: bool, webhook_url: str = None):
     else:
         print("⚠️  Tidak ada webhook URL — laporan tidak akan dikirim ke Discord!")
 
+    profile_dir = os.environ.get("CHROME_PROFILE", "/home/ubuntu/arc-chrome-profile")
+
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(
+            launch_kwargs = dict(
+                user_data_dir=profile_dir,
                 headless=headless,
                 args=[
                     "--no-sandbox",
                     "--disable-dev-shm-usage",
                     "--disable-blink-features=AutomationControlled",
-                ]
-            )
-            context = await browser.new_context(
+                ],
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
             )
+            # Pakai real Google Chrome kalau terinstall, fallback ke Chromium
+            try:
+                context = await p.chromium.launch_persistent_context(channel="chrome", **launch_kwargs)
+                print("🌐 Pakai real Google Chrome")
+            except Exception:
+                context = await p.chromium.launch_persistent_context(**launch_kwargs)
+                print("🌐 Pakai Chromium (Chrome tidak tersedia)")
+
+            browser = context.browser
             await context.add_init_script("""
                 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
                 Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3] });
@@ -450,7 +459,7 @@ async def main(cookies_path: str, headless: bool, webhook_url: str = None):
                 raw = load_cookies(cookies_path)
                 await context.add_cookies(normalize_cookies(raw))
 
-            page = await context.new_page()
+            page = context.pages[0] if context.pages else await context.new_page()
 
             print("🔐 Cek status login...")
             logged_in = await check_logged_in(page)
@@ -464,7 +473,7 @@ async def main(cookies_path: str, headless: bool, webhook_url: str = None):
                     print(f"❌ {msg}")
                     if webhook_url:
                         send_discord(webhook_url, [], None, 0, error=msg)
-                    await browser.close()
+                    await context.close()
                     sys.exit(1)
 
             print("✅ Login berhasil!")
@@ -497,7 +506,7 @@ async def main(cookies_path: str, headless: bool, webhook_url: str = None):
             if webhook_url:
                 send_discord(webhook_url, success_articles, watched_video, points)
 
-            await browser.close()
+            await context.close()
 
     except Exception as e:
         import traceback
