@@ -113,6 +113,11 @@ async def scroll_load(page, max_rounds=30, stable_target=2):
 async def check_logged_in(page):
     await page.goto(f"{BASE_URL}/home", wait_until="domcontentloaded", timeout=30000)
     await page.wait_for_timeout(3000)
+    try:
+        await page.screenshot(path="login_check.png")
+        print("   📸 Screenshot disimpan: login_check.png")
+    except Exception:
+        pass
     logged_in = await page.evaluate("""
         () => !![...document.querySelectorAll('header img, nav img')]
             .find(i => /\\/avatar\\//i.test(i.src || ''))
