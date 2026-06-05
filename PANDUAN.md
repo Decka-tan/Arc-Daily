@@ -1,149 +1,157 @@
-# Panduan Garap Arc Daily (Bahasa Awam, Anti-Ribet)
+# Panduan Arc Daily Bot — Bahasa Awam
 
-Buat kamu yang **ga ngerti coding sama sekali**. Ikutin pelan-pelan, ga ada yang susah kok.
+Bot ini ngerjain tugas harian [community.arc.io](https://community.arc.io) otomatis:
+**5 artikel + 4 video + absen = 27 poin/hari**. Sekali jalan ±20 menit.
 
-Bot ini bakal otomatis: **baca 5 artikel + nonton 4 video + absen harian = 27 poin/hari** di [community.arc.io](https://community.arc.io). Kamu tinggal jalanin, dia kerja sendiri ~20 menit.
+> ⚠️ **BACA INI DULU — penting:**
+> 1. "Kunci login" (cookie) Arc **cuma hidup 2 jam**. Jadi ambil cookie **PERSIS sebelum** jalanin bot. Telat = login gagal.
+> 2. Bot sengaja jalan lama (±20 menit). Itu normal, biar dianggap baca beneran.
+> 3. Cek poin **2-3 menit setelah** bot selesai (nyatetnya agak telat).
 
 ---
 
-## 🅰️ CARA GAMPANG: Jalan di Laptop Sendiri (ga butuh VPS)
+# BAGIAN 1 — Jalan di Laptop (Windows)
 
-Cocok buat nyobain dulu. Laptop harus nyala selama bot jalan (~20 menit).
+Paling gampang buat nyoba. Laptop harus nyala selama bot jalan.
 
-### Langkah 1 — Install Python (sekali aja)
+### 1. Install Python
+- Buka https://www.python.org/downloads/
+- Klik **Download Python**
+- Buka file-nya → **CENTANG "Add Python to PATH"** → Install Now
 
-1. Buka [python.org/downloads](https://www.python.org/downloads/)
-2. Klik tombol kuning **Download Python**
-3. Buka file-nya, **CENTANG "Add Python to PATH"** (penting!), lalu Install
+### 2. Download bot
+- Buka https://github.com/Decka-tan/Arc-Daily
+- Tombol hijau **Code** → **Download ZIP** → extract (misal ke Desktop)
 
-### Langkah 2 — Download bot-nya
+### 3. Buka Terminal di folder bot
+- Masuk folder hasil extract (`Arc-Daily-main`)
+- Klik kanan area kosong → **Open in Terminal**
 
-1. Buka [github.com/Decka-tan/Arc-Daily](https://github.com/Decka-tan/Arc-Daily)
-2. Klik tombol hijau **Code** → **Download ZIP**
-3. Extract ZIP-nya ke folder mana aja (misal Desktop)
-
-### Langkah 3 — Buka "Terminal" di folder itu
-
-- **Windows**: buka folder hasil extract → klik kanan area kosong → **Open in Terminal** (atau ketik `cmd` di address bar folder lalu Enter)
-- **Mac**: buka aplikasi **Terminal**, ketik `cd ` (pakai spasi) lalu seret folder-nya ke Terminal, Enter
-
-### Langkah 4 — Pasang perlengkapan (copy-paste satu-satu, Enter tiap baris)
-
+### 4. Pasang perlengkapan (sekali aja)
+Ketik satu per satu, Enter tiap baris:
 ```
 pip install -r requirements.txt
-```
-```
-playwright install chromium
+python -m playwright install chromium
 ```
 
-Tunggu sampai selesai (sekali ini doang).
+### 5. Ambil cookie (kunci login)
+- Buka https://community.arc.io di Chrome, **pastikan udah login**
+- Pasang extension **Cookie-Editor** dari Chrome Web Store
+- Klik ikon Cookie-Editor → **Export** → **Export as JSON** (otomatis ke-copy)
+- Buka **Notepad** → Paste → Save As → nama file: `cookies.json` → simpan di folder bot
+  (pas Save As, ganti "Save as type" jadi **All Files** biar ga jadi .txt)
 
-### Langkah 5 — Ambil "kunci login" (cookies)
-
-Ini biar bot bisa masuk pakai akun kamu:
-
-1. Buka [community.arc.io](https://community.arc.io) di Chrome, **pastikan kamu udah login**
-2. Pasang extension **Cookie-Editor** dari Chrome Web Store
-3. Klik ikon Cookie-Editor → klik **Export** (ikon di kanan bawah) → **Export as JSON**
-4. Buat file baru namanya **`cookies.json`** di folder bot, **paste** isinya, simpan
-
-> Gampangnya: buka Notepad → paste → Save As → ketik `cookies.json` (pakai tanda kutip) di folder bot.
-
-### Langkah 6 — JALANKAN
-
+### 6. Jalanin
 ```
 python arc_daily.py --no-headless
 ```
+Jendela Chrome kebuka, jalan sendiri. **Jangan ditutup.** Tunggu sampai muncul **✅ SELESAI!**
 
-Bakal kebuka jendela Chrome dan jalan sendiri. **Jangan ditutup**, biarin ~20 menit sampai muncul tulisan **✅ SELESAI!**
-
-### Langkah 7 — Cek hasil
-
-Tunggu 2-3 menit, buka [halaman poin kamu](https://community.arc.io/home/contributors/my-contributions). Harusnya nambah artikel & video baru. 🎉
+### 7. Cek poin
+Tunggu 2-3 menit → buka https://community.arc.io/home/contributors/my-contributions
 
 ---
 
-## 🔔 (Opsional) Biar Lapor ke Discord Otomatis
+# BAGIAN 2 — Jalan di VPS (otomatis tiap hari)
 
-Kalau mau tiap selesai bot ngabarin hasilnya ke Discord (jumlah artikel, video, poin), pasang **webhook**. Ga wajib, tapi enak buat mantau.
+Buat yang udah bisa Bagian 1 dan mau bener-bener AFK. VPS = Linux, perintahnya **`python3`** (bukan `python`).
 
-### Cara bikin webhook Discord:
-
-1. Buka server Discord kamu → pilih channel buat nampung laporan
-2. Klik ikon ⚙️ (Edit Channel) di sebelah nama channel
-3. Menu kiri → **Integrations** → **Webhooks** → **New Webhook**
-4. Klik **Copy Webhook URL** (bentuknya `https://discord.com/api/webhooks/...`)
-
-### Cara pakainya:
-
-Tambahin `--webhook` di belakang perintah jalanin tadi:
-
+### 1. Pasang perlengkapan (sekali aja)
 ```
-python arc_daily.py --no-headless --webhook "TEMPEL_URL_WEBHOOK_DISINI"
-```
-
-(Di Linux/VPS ganti `python` jadi `python3`.)
-
-Atau biar ga usah ngetik tiap kali: bikin file `.env` di folder bot, isi:
-
-```
-DISCORD_WEBHOOK=https://discord.com/api/webhooks/xxxxx/yyyyy
-```
-
-Habis itu cukup jalanin `python arc_daily.py` aja, webhook kebaca otomatis.
-
-> Catatan: webhook dari VPS kadang ditolak Discord (error 1010). Bot ini udah otomatis ngakalin itu, jadi aman.
-
----
-
-## 🅱️ CARA OTOMATIS: Pakai VPS (jalan tiap hari sendiri)
-
-Kalau udah jago Cara A dan mau **bener-bener AFK** (ga usah nyalain laptop), baru pindah ke VPS. VPS = komputer sewaan yang nyala 24 jam.
-
-Langkahnya mirip, bedanya di Linux pakai **`python3`** (bukan `python`):
-
-```
-# pasang perlengkapan (sekali aja):
+sudo apt-get update && sudo apt-get install -y python3 python3-pip git xvfb
+git clone https://github.com/Decka-tan/Arc-Daily
+cd Arc-Daily
 pip3 install -r requirements.txt
 python3 -m playwright install chromium
 python3 -m playwright install-deps chromium
-sudo apt-get install -y xvfb
-
-# jalanin (pakai xvfb biar lolos deteksi bot):
-xvfb-run --auto-servernum python3 arc_daily.py
 ```
 
-> Kalau `python3` juga ga ada: `sudo apt-get install -y python3 python3-pip`
+### 2. Taruh cookie
+Bikin file `cookies.json` di folder `Arc-Daily` (isi dari Cookie-Editor, sama kayak Bagian 1 langkah 5).
 
-Lalu set biar jalan otomatis tiap jam 8 pagi:
+### 3. Jalanin
+```
+xvfb-run --auto-servernum python3 arc_daily.py
+```
+> `xvfb-run` itu WAJIB di VPS. Tanpa itu browser dianggap "ga keliatan" dan poin GA keitung.
+
+### 4. Auto tiap hari (jam 8 pagi WIB)
 ```
 crontab -e
 ```
-Tambahin baris ini (ganti path sesuai folder kamu):
+Tambah baris ini (sesuaikan path folder):
 ```
 0 1 * * * cd ~/Arc-Daily && xvfb-run --auto-servernum python3 arc_daily.py >> arc.log 2>&1
 ```
+> Masalah: cookie mati tiap 2 jam, jadi cron harian butuh cookie yang masih valid. Solusi auto-refresh belum jadi — sementara ini paling pas dijalanin manual pas cookie fresh.
 
 ---
 
-## ⚠️ Yang WAJIB Diingat
+# BAGIAN 3 — (Opsional) Lapor ke Discord
 
-1. **Kunci login (cookies) cuma tahan ~2 jam.** Jadi ambil cookie-nya **tepat sebelum** jalanin bot. Kalau bot bilang "login gagal", berarti cookie udah basi — ulangi Langkah 5.
+Biar tiap selesai dikabarin hasilnya.
 
-2. **Cek poin 2-3 menit SETELAH bot selesai**, jangan buru-buru. Sistem Arc nyatet poinnya agak telat.
+### Bikin webhook:
+1. Discord → pilih channel → ⚙️ **Edit Channel**
+2. **Integrations** → **Webhooks** → **New Webhook** → **Copy Webhook URL**
 
-3. **1 akun = 1 cookies.json.** Kalau mau garap rame-rame, tiap orang export cookie dari akun masing-masing.
-
-4. Bot jalan ~20 menit. Itu normal — sengaja lama biar dianggap "beneran baca", bukan bot.
+### Pakainya:
+```
+python arc_daily.py --no-headless --webhook "TEMPEL_URL_DISINI"
+```
+(VPS: ganti `python` → `python3`, tambah `xvfb-run --auto-servernum` di depan)
 
 ---
 
-## 😵 Kalau Error
+# Cara Update cookies.json (tiap kali mau jalanin)
 
-| Tulisan error | Artinya | Solusi |
-|---|---|---|
-| `login gagal` / `cookie expired` | Cookie udah basi | Ambil cookie baru (Langkah 5) |
-| `python: command not found` | Di Windows: ulangi Langkah 1, centang "Add to PATH". Di Linux/VPS: pakai `python3` (bukan `python`) | |
-| `playwright not found` | Belum install | Jalanin Langkah 4 lagi |
+Karena cookie mati tiap 2 jam, tiap mau jalanin bot kamu ambil cookie baru. Langkah ambilnya sama: buka community.arc.io (udah login) → Cookie-Editor → **Export as JSON**. Bedanya cara nyimpennya:
 
-Stuck? Screenshot tulisannya, tanya ke yang ngajakin kamu. 👍
+### Di Laptop (Windows) — gampang
+- Buka file `cookies.json` lama pakai **Notepad**
+- **Ctrl+A** (blok semua) → **Delete** → **Paste** (Ctrl+V) cookie baru → **Save** (Ctrl+S)
+- Selesai.
+
+### Di VPS (Linux) — pakai 1 perintah
+Ga usah nano/editor. Ketik ini (ganti folder kalau beda), terus **paste** cookie, lalu di baris baru ketik `EOF` + Enter:
+
+```
+cat > ~/Arc-Daily/cookies.json << 'EOF'
+```
+(setelah Enter, paste isi cookie dari Cookie-Editor)
+(lalu ketik di baris baru:)
+```
+EOF
+```
+
+Contoh lengkap tampilannya:
+```
+ubuntu@vps:~$ cat > ~/Arc-Daily/cookies.json << 'EOF'
+> [ ...paste cookie panjang di sini... ]
+> EOF
+ubuntu@vps:~$
+```
+Tanda `>` muncul sendiri, itu normal. Setelah ketik `EOF` + Enter, cookie kesimpen.
+
+Cek udah masuk apa belum:
+```
+head -c 200 ~/Arc-Daily/cookies.json
+```
+Kalau muncul `[{"domain":".community.arc.io"...` berarti udah bener.
+
+---
+
+# Kalau Error
+
+| Tulisan | Solusi |
+|---|---|
+| `login gagal` / `cookie expired` | Cookie basi (lewat 2 jam). Ambil ulang (langkah 5). |
+| `python: not found` (di VPS) | Pakai `python3`, bukan `python` |
+| `playwright: ... not found` | Ulangi langkah pasang perlengkapan |
+| `cookies.json ... No such file` | File belum dibuat / salah folder / kesimpan jadi .txt |
+
+Stuck? Screenshot error-nya, kirim ke yang ngajakin.
+
+---
+
+> 📌 **Status jujur:** versi script ini baru dirombak pakai metode yang terbukti dapet 25 poin (lewat Hermes). Tapi script standalone-nya **belum 100% dites end-to-end**. Tes resmi pertama: besok pas limit harian reset. Kalau ada error pas dijalanin, wajar — laporin biar dibenerin.
