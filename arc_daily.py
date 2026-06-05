@@ -103,7 +103,7 @@ async def scroll_load(page, max_rounds=30, stable_target=2):
 
 
 async def check_logged_in(page):
-    await page.goto(f"{BASE_URL}/home", wait_until="networkidle", timeout=30000)
+    await page.goto(f"{BASE_URL}/home", wait_until="domcontentloaded", timeout=30000)
     await page.wait_for_timeout(3000)
     logged_in = await page.evaluate("""
         () => !![...document.querySelectorAll('header img, nav img')]
@@ -115,7 +115,7 @@ async def check_logged_in(page):
 async def get_history(page):
     print("📋 Ambil riwayat dari my-contributions...")
     await page.goto(f"{BASE_URL}/home/contributors/my-contributions",
-                    wait_until="networkidle", timeout=30000)
+                    wait_until="domcontentloaded", timeout=30000)
     await scroll_load(page, max_rounds=40, stable_target=2)
     result = await page.evaluate("""
         () => {
@@ -147,7 +147,7 @@ async def get_history(page):
 
 async def get_candidates(page):
     print("🔍 Scan konten dari homepage...")
-    await page.goto(f"{BASE_URL}/home", wait_until="networkidle", timeout=30000)
+    await page.goto(f"{BASE_URL}/home", wait_until="domcontentloaded", timeout=30000)
     await scroll_load(page, max_rounds=30, stable_target=2)
     items = await page.evaluate("""
         () => {
@@ -209,7 +209,7 @@ async def read_articles(page, articles, max_count=5):
         url = f"{BASE_URL}/home/{article['slug']}"
         print(f"   → {article['type']}: {article['title'][:60]}...")
         try:
-            await page.goto(url, wait_until="networkidle", timeout=15000)
+            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
         except PWTimeout:
             print("     ✗ Timeout navigasi, skip.")
             fail_streak += 1
@@ -244,7 +244,7 @@ async def watch_video(page, videos, max_try=3):
         url = f"{BASE_URL}/home/{video['slug']}"
         print(f"   → {video['title'][:60]}...")
         try:
-            await page.goto(url, wait_until="networkidle", timeout=20000)
+            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
         except PWTimeout:
             print("     ✗ Timeout, coba video berikutnya.")
             continue
@@ -310,7 +310,7 @@ def normalize_cookies(cookies: list) -> list:
 async def linkedin_login(page, email: str, password: str) -> bool:
     print("🔑 Login via LinkedIn...")
     try:
-        await page.goto(f"{BASE_URL}/home", wait_until="networkidle", timeout=30000)
+        await page.goto(f"{BASE_URL}/home", wait_until="domcontentloaded", timeout=30000)
         await page.wait_for_timeout(2000)
 
         # Klik tombol login LinkedIn di Arc
@@ -346,7 +346,7 @@ async def linkedin_login(page, email: str, password: str) -> bool:
         current_url = page.url
         if 'linkedin.com' not in current_url:
             print("   ⚠️  Tidak redirect ke LinkedIn, coba langsung ke LinkedIn login")
-            await page.goto("https://www.linkedin.com/login", wait_until="networkidle", timeout=20000)
+            await page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded", timeout=20000)
 
         await page.wait_for_timeout(2000)
 
