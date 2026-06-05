@@ -63,6 +63,39 @@ Tunggu 2-3 menit, buka [halaman poin kamu](https://community.arc.io/home/contrib
 
 ---
 
+## 🔔 (Opsional) Biar Lapor ke Discord Otomatis
+
+Kalau mau tiap selesai bot ngabarin hasilnya ke Discord (jumlah artikel, video, poin), pasang **webhook**. Ga wajib, tapi enak buat mantau.
+
+### Cara bikin webhook Discord:
+
+1. Buka server Discord kamu → pilih channel buat nampung laporan
+2. Klik ikon ⚙️ (Edit Channel) di sebelah nama channel
+3. Menu kiri → **Integrations** → **Webhooks** → **New Webhook**
+4. Klik **Copy Webhook URL** (bentuknya `https://discord.com/api/webhooks/...`)
+
+### Cara pakainya:
+
+Tambahin `--webhook` di belakang perintah jalanin tadi:
+
+```
+python arc_daily.py --no-headless --webhook "TEMPEL_URL_WEBHOOK_DISINI"
+```
+
+(Di Linux/VPS ganti `python` jadi `python3`.)
+
+Atau biar ga usah ngetik tiap kali: bikin file `.env` di folder bot, isi:
+
+```
+DISCORD_WEBHOOK=https://discord.com/api/webhooks/xxxxx/yyyyy
+```
+
+Habis itu cukup jalanin `python arc_daily.py` aja, webhook kebaca otomatis.
+
+> Catatan: webhook dari VPS kadang ditolak Discord (error 1010). Bot ini udah otomatis ngakalin itu, jadi aman.
+
+---
+
 ## 🅱️ CARA OTOMATIS: Pakai VPS (jalan tiap hari sendiri)
 
 Kalau udah jago Cara A dan mau **bener-bener AFK** (ga usah nyalain laptop), baru pindah ke VPS. VPS = komputer sewaan yang nyala 24 jam.
