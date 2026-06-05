@@ -202,6 +202,17 @@ def filter_candidates(items, read_titles, video_titles):
 
 async def read_articles(page, articles, max_count=5):
     print(f"\n📖 Mulai baca artikel (target: {max_count})...")
+
+    api_calls = []
+    def on_request(request):
+        if any(x in request.url for x in ['/api/', 'graphql', 'activity', 'read', 'track', 'event', 'contrib']):
+            api_calls.append(f"  [REQ] {request.method} {request.url}")
+    def on_response(response):
+        if any(x in response.url for x in ['/api/', 'graphql', 'activity', 'read', 'track', 'event', 'contrib']):
+            api_calls.append(f"  [RES] {response.status} {response.url}")
+    page.on("request", on_request)
+    page.on("response", on_response)
+
     success = []
     fail_streak = 0
     for article in articles:
@@ -212,6 +223,7 @@ async def read_articles(page, articles, max_count=5):
             break
         url = f"{BASE_URL}/home/{article['slug']}"
         print(f"   → {article['type']}: {article['title'][:60]}...")
+        api_calls.clear()
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=15000)
         except PWTimeout:
@@ -221,16 +233,22 @@ async def read_articles(page, articles, max_count=5):
 
         title = await page.evaluate("""
             async () => {
-                await new Promise(r => setTimeout(r, 3000));
+                await new Promise(r => setTimeout(r, 5000));
                 const h = document.body.scrollHeight;
                 for (let i = 1; i <= 10; i++) {
                     window.scrollTo({ top: (h * i) / 11, behavior: 'smooth' });
-                    await new Promise(r => setTimeout(r, 3000));
+                    await new Promise(r => setTimeout(r, 8000));
                 }
-                await new Promise(r => setTimeout(r, 3000));
+                await new Promise(r => setTimeout(r, 5000));
                 return document.title;
             }
         """)
+        if api_calls:
+            print("     📡 API calls detected:")
+            for c in api_calls:
+                print(c)
+        else:
+            print("     ⚠️  Tidak ada API call terdeteksi")
         if title and not any(kw in title.lower() for kw in ['404', 'error', 'not found']):
             success.append(article)
             fail_streak = 0
