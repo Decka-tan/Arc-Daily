@@ -154,4 +154,4 @@ Stuck? Screenshot error-nya, kirim ke yang ngajakin.
 
 ---
 
-> 📌 **Status jujur:** versi script ini baru dirombak pakai metode yang terbukti dapet 25 poin (lewat Hermes). Tapi script standalone-nya **belum 100% dites end-to-end**. Tes resmi pertama: besok pas limit harian reset. Kalau ada error pas dijalanin, wajar — laporin biar dibenerin.
+> 📌 **Status jujur:** versi script ini baru dirombak pakai metode yang terbukti dapet 27 poin (lewat Hermes). Tapi script standalone-nya **belum 100% dites end-to-end**. Tes resmi pertama: besok pas limit harian reset. Kalau ada error pas dijalanin, wajar — laporin biar dibenerin.
