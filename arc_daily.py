@@ -60,7 +60,11 @@ def send_discord(webhook_url: str, success_articles: list, watched_video, points
     req = urllib.request.Request(
         webhook_url,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        },
         method="POST"
     )
     proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
