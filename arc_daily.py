@@ -389,73 +389,83 @@ async def main(cookies_path: str, headless: bool, webhook_url: str = None):
     li_email = os.environ.get("LINKEDIN_EMAIL")
     li_password = os.environ.get("LINKEDIN_PASSWORD")
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=headless,
-            args=["--no-sandbox", "--disable-dev-shm-usage"]
-        )
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                       "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        )
+    if webhook_url:
+        print(f"📡 Webhook aktif: {webhook_url[:50]}...")
+    else:
+        print("⚠️  Tidak ada webhook URL — laporan tidak akan dikirim ke Discord!")
 
-        # Inject cookies kalau file ada
-        if Path(cookies_path).exists():
-            print("🍪 Inject cookies...")
-            raw = load_cookies(cookies_path)
-            await context.add_cookies(normalize_cookies(raw))
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=headless,
+                args=["--no-sandbox", "--disable-dev-shm-usage"]
+            )
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                           "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            )
 
-        page = await context.new_page()
+            if Path(cookies_path).exists():
+                print("🍪 Inject cookies...")
+                raw = load_cookies(cookies_path)
+                await context.add_cookies(normalize_cookies(raw))
 
-        # Cek login
-        print("🔐 Cek status login...")
-        logged_in = await check_logged_in(page)
+            page = await context.new_page()
 
-        if not logged_in:
-            if li_email and li_password:
-                print("🔄 Cookie expired, coba auto-login LinkedIn...")
-                logged_in = await linkedin_login(page, li_email, li_password)
+            print("🔐 Cek status login...")
+            logged_in = await check_logged_in(page)
+
             if not logged_in:
-                msg = "Login gagal. Set LINKEDIN_EMAIL & LINKEDIN_PASSWORD di .env, atau perbarui cookies.json."
-                print(f"❌ {msg}")
-                if webhook_url:
-                    send_discord(webhook_url, [], None, 0, error=msg)
-                await browser.close()
-                sys.exit(1)
+                if li_email and li_password:
+                    print("🔄 Cookie expired, coba auto-login LinkedIn...")
+                    logged_in = await linkedin_login(page, li_email, li_password)
+                if not logged_in:
+                    msg = "Login gagal. Set LINKEDIN_EMAIL & LINKEDIN_PASSWORD di .env, atau perbarui cookies.json."
+                    print(f"❌ {msg}")
+                    if webhook_url:
+                        send_discord(webhook_url, [], None, 0, error=msg)
+                    await browser.close()
+                    sys.exit(1)
 
-        print("✅ Login berhasil!")
+            print("✅ Login berhasil!")
 
-        # Eksekusi task
-        read_titles, video_titles = await get_history(page)
-        candidates = await get_candidates(page)
-        articles, videos = filter_candidates(candidates, read_titles, video_titles)
+            read_titles, video_titles = await get_history(page)
+            candidates = await get_candidates(page)
+            articles, videos = filter_candidates(candidates, read_titles, video_titles)
 
-        print(f"\n📊 Kandidat tersedia: {len(articles)} artikel, {len(videos)} video")
+            print(f"\n📊 Kandidat tersedia: {len(articles)} artikel, {len(videos)} video")
 
-        success_articles = await read_articles(page, articles)
-        watched_video = await watch_video(page, videos)
+            success_articles = await read_articles(page, articles)
+            watched_video = await watch_video(page, videos)
 
-        # Laporan
-        points = len(success_articles) * 5 + (5 if watched_video else 0) + 5
-        remaining_articles = len(articles) - len(success_articles)
-        remaining_videos = len(videos) - (1 if watched_video else 0)
+            points = len(success_articles) * 5 + (5 if watched_video else 0) + 5
+            remaining_articles = len(articles) - len(success_articles)
+            remaining_videos = len(videos) - (1 if watched_video else 0)
 
-        print("\n" + "="*50)
-        print("✅ SELESAI!")
-        print(f"📖 Berhasil baca {len(success_articles)} artikel:")
-        for i, a in enumerate(success_articles, 1):
-            print(f"   {i}. {a['title'][:70]}")
-        print(f"🎬 Video: {watched_video['title'][:70] if watched_video else '—'}")
-        print(f"💰 Estimasi poin: {points}")
-        print(f"📦 Sisa stok: {remaining_articles} artikel / {remaining_videos} video")
-        print(f"⏰ Waktu: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
-        print("   Cek my-contributions dalam ~5 menit")
-        print("="*50)
+            print("\n" + "="*50)
+            print("✅ SELESAI!")
+            print(f"📖 Berhasil baca {len(success_articles)} artikel:")
+            for i, a in enumerate(success_articles, 1):
+                print(f"   {i}. {a['title'][:70]}")
+            print(f"🎬 Video: {watched_video['title'][:70] if watched_video else '—'}")
+            print(f"💰 Estimasi poin: {points}")
+            print(f"📦 Sisa stok: {remaining_articles} artikel / {remaining_videos} video")
+            print(f"⏰ Waktu: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+            print("   Cek my-contributions dalam ~5 menit")
+            print("="*50)
 
+            if webhook_url:
+                send_discord(webhook_url, success_articles, watched_video, points)
+
+            await browser.close()
+
+    except Exception as e:
+        import traceback
+        err_msg = traceback.format_exc()
+        print(f"\n❌ FATAL ERROR:\n{err_msg}")
         if webhook_url:
-            send_discord(webhook_url, success_articles, watched_video, points)
-
-        await browser.close()
+            send_discord(webhook_url, [], None, 0, error=err_msg[-1500:])
+        sys.exit(1)
 
 
 if __name__ == "__main__":
