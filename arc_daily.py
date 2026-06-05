@@ -273,18 +273,20 @@ async def read_articles(page, articles, max_count=5):
             async () => {
                 await new Promise(r => setTimeout(r, 3000));
                 const h = document.body.scrollHeight;
-                // Scroll turun pelan-pelan
+                // Scroll turun pelan-pelan di awal (kayak mulai baca)
                 for (let i = 1; i <= 8; i++) {
                     window.scrollTo({ top: (h * i) / 9, behavior: 'smooth' });
-                    await new Promise(r => setTimeout(r, 5000));
+                    await new Promise(r => setTimeout(r, 4000));
                 }
-                // Tetap di halaman lebih lama biar ping heartbeat fire berkali-kali
-                // (read tracking Arc berbasis dwell time, bukan cuma buka halaman)
-                for (let i = 0; i < 6; i++) {
-                    window.scrollBy(0, (i % 2 === 0 ? 1 : -1) * 200);
-                    await new Promise(r => setTimeout(r, 5000));
+                // DWELL: tetap di halaman ~4 menit biar ping heartbeat (user/ping)
+                // fire berkali-kali. Arc ngitung "read" berdasarkan lama tab kebuka,
+                // bukan cuma buka halaman. (terbukti: scroll dikit lalu tinggalin = masuk)
+                const t = document.title;
+                for (let i = 0; i < 24; i++) {
+                    window.scrollBy(0, (i % 2 === 0 ? 1 : -1) * 150);
+                    await new Promise(r => setTimeout(r, 10000));
                 }
-                return document.title;
+                return t;
             }
         """)
         if api_calls:
