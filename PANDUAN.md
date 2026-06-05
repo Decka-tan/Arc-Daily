@@ -67,12 +67,20 @@ Tunggu 2-3 menit, buka [halaman poin kamu](https://community.arc.io/home/contrib
 
 Kalau udah jago Cara A dan mau **bener-bener AFK** (ga usah nyalain laptop), baru pindah ke VPS. VPS = komputer sewaan yang nyala 24 jam.
 
-Langkahnya mirip, bedanya:
+Langkahnya mirip, bedanya di Linux pakai **`python3`** (bukan `python`):
 
 ```
-# di VPS (Linux), pakai ini biar lolos deteksi bot:
-xvfb-run --auto-servernum python arc_daily.py
+# pasang perlengkapan (sekali aja):
+pip3 install -r requirements.txt
+python3 -m playwright install chromium
+python3 -m playwright install-deps chromium
+sudo apt-get install -y xvfb
+
+# jalanin (pakai xvfb biar lolos deteksi bot):
+xvfb-run --auto-servernum python3 arc_daily.py
 ```
+
+> Kalau `python3` juga ga ada: `sudo apt-get install -y python3 python3-pip`
 
 Lalu set biar jalan otomatis tiap jam 8 pagi:
 ```
@@ -80,7 +88,7 @@ crontab -e
 ```
 Tambahin baris ini (ganti path sesuai folder kamu):
 ```
-0 1 * * * cd ~/Arc-Daily && xvfb-run --auto-servernum python arc_daily.py >> arc.log 2>&1
+0 1 * * * cd ~/Arc-Daily && xvfb-run --auto-servernum python3 arc_daily.py >> arc.log 2>&1
 ```
 
 ---
@@ -102,7 +110,7 @@ Tambahin baris ini (ganti path sesuai folder kamu):
 | Tulisan error | Artinya | Solusi |
 |---|---|---|
 | `login gagal` / `cookie expired` | Cookie udah basi | Ambil cookie baru (Langkah 5) |
-| `python: command not found` | Python belum keinstall bener | Ulangi Langkah 1, centang "Add to PATH" |
+| `python: command not found` | Di Windows: ulangi Langkah 1, centang "Add to PATH". Di Linux/VPS: pakai `python3` (bukan `python`) | |
 | `playwright not found` | Belum install | Jalanin Langkah 4 lagi |
 
 Stuck? Screenshot tulisannya, tanya ke yang ngajakin kamu. 👍
