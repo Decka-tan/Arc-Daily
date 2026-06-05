@@ -112,12 +112,28 @@ async def scroll_load(page, max_rounds=30, stable_target=2):
 
 async def check_logged_in(page):
     await page.goto(f"{BASE_URL}/home", wait_until="domcontentloaded", timeout=30000)
-    await page.wait_for_timeout(3000)
-    try:
-        await page.screenshot(path="login_check.png")
-        print("   📸 Screenshot disimpan: login_check.png")
-    except Exception:
-        pass
+    # Retry beberapa kali: Chrome di VPS lambat, avatar/UI butuh waktu render
+    for attempt in range(6):
+        await page.wait_for_timeout(4000)
+        signal = await page.evaluate("""
+            () => {
+                // Sinyal 1: ada avatar user di header/nav
+                const hasAvatar = !![...document.querySelectorAll('header img, nav img')]
+                    .find(i => /\\/avatar\\//i.test(i.src || ''));
+                // Sinyal 2: TIDAK ada tombol Sign in / Log in (kalau logout pasti ada)
+                const hasSignIn = !![...document.querySelectorAll('a, button')]
+                    .find(b => /^(sign in|log in|login|connect)$/i.test((b.textContent||'').trim()));
+                return { hasAvatar, hasSignIn };
+            }
+        """)
+        if signal['hasAvatar']:
+            return True
+        # Kalau ga ada avatar TAPI juga ga ada tombol login, kemungkinan masih loading → retry
+        if not signal['hasSignIn'] and attempt < 5:
+            print(f"   ⏳ UI belum siap, retry {attempt+1}/6...")
+            continue
+        if signal['hasSignIn']:
+            return False
     logged_in = await page.evaluate("""
         () => !![...document.querySelectorAll('header img, nav img')]
             .find(i => /\\/avatar\\//i.test(i.src || ''))
@@ -503,16 +519,12 @@ async def main(cookies_path: str, headless: bool, webhook_url: str = None):
             logged_in = await check_logged_in(page)
 
             if not logged_in:
-                if li_email and li_password:
-                    print("🔄 Cookie expired, coba auto-login LinkedIn...")
-                    logged_in = await linkedin_login(page, li_email, li_password)
-                if not logged_in:
-                    msg = "Login gagal. Set LINKEDIN_EMAIL & LINKEDIN_PASSWORD di .env, atau perbarui cookies.json."
-                    print(f"❌ {msg}")
-                    if webhook_url:
-                        send_discord(webhook_url, [], None, 0, error=msg)
-                    await context.close()
-                    sys.exit(1)
+                msg = "Cookie Arc expired/invalid. Perbarui cookies.json (export ulang dari browser)."
+                print(f"❌ {msg}")
+                if webhook_url:
+                    send_discord(webhook_url, [], None, 0, error=msg)
+                await context.close()
+                sys.exit(1)
 
             print("✅ Login berhasil!")
 
