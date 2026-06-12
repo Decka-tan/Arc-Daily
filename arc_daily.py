@@ -539,7 +539,7 @@ async def linkedin_login(page, email: str, password: str) -> bool:
         return False
 
 
-async def main(cookies_path: str, headless: bool, webhook_url: str = None):
+async def main(cookies_path: str, headless: bool, webhook_url: str = None, list_only: bool = False):
     li_email = os.environ.get("LINKEDIN_EMAIL")
     li_password = os.environ.get("LINKEDIN_PASSWORD")
 
@@ -602,6 +602,19 @@ async def main(cookies_path: str, headless: bool, webhook_url: str = None):
 
             print(f"\n📊 Kandidat tersedia: {len(articles)} artikel, {len(videos)} video")
 
+            # Mode --list: cuma tampilin yang BELUM dibaca/ditonton, lalu keluar
+            if list_only:
+                print("\n" + "="*60)
+                print(f"📖 ARTIKEL BELUM DIBACA ({len(articles)}):")
+                for i, a in enumerate(articles, 1):
+                    print(f"   {i:2}. [{a['type']}] {a['title']}")
+                print(f"\n🎬 VIDEO BELUM DITONTON ({len(videos)}):")
+                for i, v in enumerate(videos, 1):
+                    print(f"   {i:2}. {v['title']}")
+                print("="*60)
+                await context.close()
+                return
+
             # Read Content: max 5/24jam · Watch a Video: max 4/24jam
             success_articles = await read_articles(page, articles, max_count=5)
             watched_videos = await watch_videos(context, raw_cookies, videos, max_count=4)
@@ -648,6 +661,9 @@ if __name__ == "__main__":
                         help="Tampilkan browser window (untuk debug)")
     parser.add_argument("--webhook", default=os.environ.get("DISCORD_WEBHOOK"),
                         help="Discord webhook URL (atau set env DISCORD_WEBHOOK)")
+    parser.add_argument("--list", action="store_true",
+                        help="Cuma tampilkan artikel/video yang belum dibaca/ditonton, lalu keluar")
     args = parser.parse_args()
 
-    asyncio.run(main(args.cookies, headless=not args.no_headless, webhook_url=args.webhook))
+    asyncio.run(main(args.cookies, headless=not args.no_headless,
+                     webhook_url=args.webhook, list_only=args.list))
